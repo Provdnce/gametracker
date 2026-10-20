@@ -134,7 +134,7 @@ fn main() {
                         });
                     }
                     ticks += 1;
-                    if ticks % 8 == 0 {
+                    if ticks.is_multiple_of(8) {
                         let (tooltip, paused) = cx.update(|cx| {
                             let shared = &cx.global::<AppState>().shared;
                             let s = shared.settings();
