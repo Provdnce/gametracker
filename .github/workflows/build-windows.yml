@@ -5,18 +5,35 @@ on:
     branches: [main, master]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Tests
         run: cargo test -p gametracker-core
       - name: Release-Build
         run: cargo build --release -p gametracker
-      - uses: actions/upload-artifact@v4
+      - name: EXE umbenennen
+        run: copy target\release\gametracker.exe GameTracker.exe
+        shell: cmd
+      - uses: actions/upload-artifact@v5
         with:
           name: GameTracker-Windows
-          path: target/release/gametracker.exe
+          path: GameTracker.exe
+      # Immer die neueste Version unter "Releases" → "latest"
+      - name: Release aktualisieren
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest GameTracker.exe \
+            --title "GameTracker (neueste Version)" \
+            --notes "Automatisch gebaut aus ${GITHUB_SHA::7}. Einfach GameTracker.exe herunterladen und starten." \
+            --latest
