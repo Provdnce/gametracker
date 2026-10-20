@@ -1,9 +1,11 @@
 // No console window on Windows in release builds.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod assets;
 mod instance;
 mod pages;
 mod theme;
+mod tray;
 mod view;
 
 use gametracker_core::{Shared, Tracker, autostart};
@@ -48,8 +50,12 @@ fn main() {
     let start_hidden = std::env::args().any(|a| a == autostart::HIDDEN_FLAG);
 
     gpui_platform::application()
+        .with_assets(assets::Assets)
         .with_quit_mode(QuitMode::Explicit)
         .run(move |cx: &mut App| {
+            if let Err(e) = cx.text_system().add_fonts(assets::fonts()) {
+                log::error!("Schriften konnten nicht geladen werden: {e:#}");
+            }
             cx.bind_keys(default_bindings().as_keybindings(Some(DEFAULT_INPUT_CONTEXT)));
             cx.bind_keys([
                 KeyBinding::new("ctrl-q", Quit, None),
@@ -98,14 +104,49 @@ fn main() {
                 show_window(cx);
             }
 
-            // Another start of the exe asks us to show the window.
+            // Polls for: another start of the exe, and clicks on the tray icon.
+            let mut tray = tray::Tray::new();
             cx.spawn(async move |cx| {
+                let mut ticks = 0u32;
                 loop {
                     cx.background_executor()
-                        .timer(Duration::from_millis(400))
+                        .timer(Duration::from_millis(250))
                         .await;
                     if rx.try_recv().is_ok() {
                         cx.update(show_window);
+                    }
+                    let Some(tray) = tray.as_mut() else { continue };
+                    for action in tray.poll() {
+                        cx.update(|cx| match action {
+                            tray::TrayAction::Open => show_window(cx),
+                            tray::TrayAction::Quit => cx.quit(),
+                            tray::TrayAction::ToggleTracking => {
+                                let shared = cx.global::<AppState>().shared.clone();
+                                let on =
+                                    shared.settings().track_games || shared.settings().track_keys;
+                                shared
+                                    .update_settings(|s| {
+                                        s.track_games = !on;
+                                        s.track_keys = !on;
+                                    })
+                                    .ok();
+                            }
+                        });
+                    }
+                    ticks += 1;
+                    if ticks % 8 == 0 {
+                        let (tooltip, paused) = cx.update(|cx| {
+                            let shared = &cx.global::<AppState>().shared;
+                            let s = shared.settings();
+                            let paused = !s.track_games && !s.track_keys;
+                            let tip = match shared.active_games().first() {
+                                _ if paused => "GameTracker – pausiert".to_string(),
+                                Some(g) => format!("GameTracker – spielt {}", g.name),
+                                None => "GameTracker".to_string(),
+                            };
+                            (tip, paused)
+                        });
+                        tray.update(tooltip, paused);
                     }
                 }
             })

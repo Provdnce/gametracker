@@ -14,7 +14,9 @@ Backend in Rust, Oberfläche mit [GPUI-CE](https://github.com/gpui-ce/gpui-ce).
 - **Tastatur**: Heatmap (QWERTZ oder QWERTY), Top 20 der Tasten, Anschläge pro Tag/Monat. Filter: Gesamt, Jahr, Monat, Woche, Tag, jeweils mit ‹ › zum Blättern.
 - **Export und Import** als JSON-Datei, gedacht für PC-Wechsel. Den Import kannst du beliebig oft wiederholen, ohne dass etwas doppelt gezählt wird.
 - **Automatische Backups** (täglich/wöchentlich/monatlich, die letzten 12 werden behalten).
-- **Läuft im Hintergrund**: Fenster schließen beendet das Tracking nicht. Startest du GameTracker erneut, öffnet sich das Fenster wieder. Optional startet es mit Windows.
+- **Läuft im Hintergrund**: Fenster schließen beendet das Tracking nicht. GameTracker sitzt dann als Symbol im Infobereich der Taskleiste (rechts unten beim Pfeil): Linksklick öffnet das Fenster, Rechtsklick zeigt „Öffnen“, „Tracking pausieren“ und „Beenden“. Optional startet es mit Windows.
+- **Programme ausblenden**: Wird ein Tool fälschlich als Spiel erkannt, klickst du unter *Spiele* auf „Nicht mehr tracken“, wahlweise mit oder ohne Löschen des bisherigen Verlaufs. Wallpaper Engine, Lossless Scaling, OBS, SteamVR & Co. werden von vornherein nicht als Spiel gezählt. Rückgängig machen kannst du das unter *Einstellungen → Ignorierte Programme*.
+- **Darstellung**: Hintergrund (Graphit, Mitternacht, Hell) und Akzentfarbe (Indigo, Ozean, Salbei, Sand, Rosé, Graphit) sind wählbar.
 
 ## Datenschutz beim Tastatur-Tracking
 
@@ -84,6 +86,11 @@ crates/core/   Backend (ohne UI, getestet: cargo test -p gametracker-core)
   autostart.rs   Autostart für Windows/Linux/macOS
 crates/app/    GPUI-CE-Oberfläche
 ```
+
+## Danksagungen
+
+- Schrift: [Inter](https://rsms.me/inter/) von Rasmus Andersson (SIL Open Font License, siehe `crates/app/assets/fonts/Inter-LICENSE.txt`)
+- Icons: [Lucide](https://lucide.dev) (ISC License)
 
 ## Hinweise
 

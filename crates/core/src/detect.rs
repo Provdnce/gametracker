@@ -56,12 +56,31 @@ const NON_GAME_FOLDERS: &[&str] = &[
     "epic online services",
     "directxredist",
     "riot client",
-    "launcher",
     "battle.net",
+    // Tools that are sold on Steam but aren't games
+    "wallpaper_engine",
+    "wallpaper engine",
+    "lossless scaling",
+    "soundpad",
+    "obs studio",
+    "steamvr",
+    "vtube studio",
+    "fpsvr",
+    "blender",
+    "aseprite",
+    "krita",
+    "voicemeeter",
+    "rtx remix",
+    "fpsmonitor",
+    "wallpaperengine",
 ];
 
 /// Executables that live in game folders but are not the game itself.
 const NON_GAME_EXES: &[&str] = &[
+    "wallpaper32.exe",
+    "wallpaper64.exe",
+    "webwallpaper32.exe",
+    "ui32.exe",
     "unitycrashhandler64.exe",
     "unitycrashhandler32.exe",
     "crashreportclient.exe",
@@ -154,6 +173,8 @@ const KNOWN_GAMES: &[(&str, &str)] = &[
 
 pub struct Detector {
     rules: HashMap<String, Rule>,
+    /// Lowercase names of games the user doesn't want tracked
+    ignored: std::collections::HashSet<String>,
     pub auto_detect: bool,
 }
 
@@ -164,11 +185,23 @@ impl Detector {
                 .into_iter()
                 .map(|r| (r.exe.to_lowercase(), r))
                 .collect(),
+            ignored: Default::default(),
             auto_detect,
         }
     }
 
+    /// Games (by name) that are never tracked, however they are detected.
+    pub fn with_ignored(mut self, names: impl IntoIterator<Item = String>) -> Self {
+        self.ignored = names.into_iter().map(|n| n.to_lowercase()).collect();
+        self
+    }
+
     pub fn detect(&self, p: &ProcInfo) -> Option<Detected> {
+        self.detect_any(p)
+            .filter(|d| !self.ignored.contains(&d.name.to_lowercase()))
+    }
+
+    fn detect_any(&self, p: &ProcInfo) -> Option<Detected> {
         let exe = p.exe.to_lowercase();
         if let Some(rule) = self.rules.get(&exe) {
             return (!rule.ignored).then(|| Detected {
@@ -353,6 +386,26 @@ mod tests {
         assert!(
             off.detect(&p("cs2.exe", r"C:\Steam\steamapps\common\cs2\cs2.exe"))
                 .is_none()
+        );
+    }
+
+    #[test]
+    fn ignored_and_tools() {
+        let d = Detector::new(vec![], true);
+        assert!(
+            d.detect(&p(
+                "wallpaper64.exe",
+                r"C:\Steam\steamapps\common\wallpaper_engine\wallpaper64.exe"
+            ))
+            .is_none()
+        );
+        let d = Detector::new(vec![], true).with_ignored(["hades ii".to_string()]);
+        assert!(
+            d.detect(&p(
+                "hades2.exe",
+                r"D:\SteamLibrary\steamapps\common\Hades II\Ship\Hades2.exe"
+            ))
+            .is_none()
         );
     }
 

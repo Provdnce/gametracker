@@ -19,12 +19,12 @@ impl MainView {
         let live = if !self.settings.track_games {
             card().child(muted("Spiele-Tracking ist pausiert. Du kannst es in den Einstellungen wieder einschalten."))
         } else if self.active.is_empty() {
-            card().flex().items_center().gap_3().child(div().text_color(rgb(FAINT)).child("○")).child(muted(
+            card().flex().items_center().gap_3().child(dot(c().faint, false)).child(muted(
                 "Gerade läuft kein Spiel. Sobald du eins startest, wird es hier automatisch angezeigt.",
             ))
         } else {
             card()
-                .border_color(rgb(LIVE))
+                .border_color(rgb(c().live))
                 .flex()
                 .flex_col()
                 .gap_2()
@@ -38,11 +38,11 @@ impl MainView {
                                 .flex()
                                 .items_center()
                                 .gap_3()
-                                .child(div().text_color(rgb(LIVE)).child("●"))
+                                .child(dot(c().live, true))
                                 .child(
                                     div()
                                         .text_lg()
-                                        .font_weight(FontWeight::BOLD)
+                                        .font_weight(FontWeight::SEMIBOLD)
                                         .child(g.name.clone()),
                                 )
                                 .child(muted(format!("seit {} Uhr", fmt::time(g.start)))),
@@ -50,7 +50,7 @@ impl MainView {
                         .child(
                             div()
                                 .text_lg()
-                                .text_color(rgb(LIVE))
+                                .text_color(rgb(c().live))
                                 .child(fmt::duration(now - g.start)),
                         )
                 }))
@@ -60,23 +60,27 @@ impl MainView {
             .flex()
             .flex_wrap()
             .gap_3()
-            .child(stat("Heute", fmt::duration(total(PeriodKind::Day)), TEXT))
+            .child(stat(
+                "Heute",
+                fmt::duration(total(PeriodKind::Day)),
+                c().text,
+            ))
             .child(stat(
                 "Diese Woche",
                 fmt::duration(total(PeriodKind::Week)),
-                TEXT,
+                c().text,
             ))
             .child(stat(
                 format!("{} {}", fmt::month_name(today.month()), today.year()),
                 fmt::duration(total(PeriodKind::Month)),
-                TEXT,
+                c().text,
             ))
             .child(stat(
                 "Insgesamt",
                 fmt::duration(total(PeriodKind::All)),
-                ACCENT,
+                c().accent,
             ))
-            .child(stat("Tasten heute", fmt::number(self.keys_today), LIVE));
+            .child(stat("Tasten heute", fmt::number(self.keys_today), c().live));
 
         // Last 30 days chart
         let from = today - Duration::days(29);
@@ -99,7 +103,7 @@ impl MainView {
                 ChartId::Last30,
                 &days,
                 |v| fmt::duration(v as i64),
-                ACCENT,
+                c().accent,
                 cx,
             ));
 
@@ -134,11 +138,11 @@ impl MainView {
                             .flex_col()
                             .child(
                                 div()
-                                    .text_color(rgb(TEXT))
+                                    .text_color(rgb(c().text))
                                     .truncate()
                                     .child(s.game_name.clone()),
                             )
-                            .child(div().text_xs().text_color(rgb(MUTED)).child(format!(
+                            .child(div().text_xs().text_color(rgb(c().muted)).child(format!(
                                 "{} · {}–{}",
                                 fmt::date(s.start),
                                 fmt::time(s.start),
@@ -148,7 +152,7 @@ impl MainView {
                     .child(
                         div()
                             .text_sm()
-                            .text_color(rgb(MUTED))
+                            .text_color(rgb(c().muted))
                             .child(fmt::duration(s.duration())),
                     )
             }));
@@ -170,10 +174,14 @@ impl MainView {
                     .child(
                         div()
                             .id("all-games")
+                            .flex()
+                            .items_center()
+                            .gap_1()
                             .text_xs()
-                            .text_color(rgb(ACCENT))
+                            .text_color(rgb(c().accent))
                             .cursor_pointer()
-                            .child("Alle Spiele →")
+                            .child("Alle Spiele")
+                            .child(icon(Icon::ChevronRight, 12., c().accent))
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.set_period(
                                     PeriodTarget::Games,
@@ -199,7 +207,7 @@ impl MainView {
                             .child(
                                 div()
                                     .text_sm()
-                                    .text_color(rgb(MUTED))
+                                    .text_color(rgb(c().muted))
                                     .flex_none()
                                     .child(fmt::duration(g.secs)),
                             ),
@@ -281,10 +289,10 @@ impl MainView {
                         .gap_3()
                         .children(years.iter().map(|(y, secs)| {
                             let year = *y;
-                            stat(year.to_string(), fmt::duration(*secs), TEXT)
+                            stat(year.to_string(), fmt::duration(*secs), c().text)
                                 .id(SharedString::from(format!("year-{year}")))
                                 .cursor_pointer()
-                                .hover_style(|s| s.border_color(rgb(ACCENT)))
+                                .hover_style(|s| s.border_color(rgb(c().accent)))
                                 .on_click(cx.listener(move |this, _, _, cx| {
                                     let anchor =
                                         chrono::NaiveDate::from_ymd_opt(year, 1, 1).unwrap();
@@ -332,7 +340,7 @@ impl MainView {
                                     .child(
                                         div()
                                             .text_lg()
-                                            .font_weight(FontWeight::BOLD)
+                                            .font_weight(FontWeight::SEMIBOLD)
                                             .child(format!("{} {}", fmt::month_name(month), year)),
                                     )
                                     .child(muted(format!(
@@ -342,7 +350,16 @@ impl MainView {
                                         m.sessions
                                     ))),
                             )
-                            .child(div().text_xs().text_color(rgb(ACCENT)).child("Details →")),
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap_1()
+                                    .text_xs()
+                                    .text_color(rgb(c().accent))
+                                    .child("Details")
+                                    .child(icon(Icon::ChevronRight, 12., c().accent)),
+                            ),
                     )
                     .children(m.games.iter().take(shown).map(|(name, secs)| {
                         div()
@@ -368,7 +385,7 @@ impl MainView {
                                     .flex_none()
                                     .text_right()
                                     .text_sm()
-                                    .text_color(rgb(MUTED))
+                                    .text_color(rgb(c().muted))
                                     .child(fmt::duration(*secs)),
                             )
                     }))
@@ -376,7 +393,7 @@ impl MainView {
                         d.child(
                             div()
                                 .text_xs()
-                                .text_color(rgb(FAINT))
+                                .text_color(rgb(c().faint))
                                 .child(format!("+ {more} weitere")),
                         )
                     })

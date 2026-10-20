@@ -169,27 +169,107 @@ impl MainView {
                     })),
             );
 
-        let layout =
-            card()
-                .flex()
-                .flex_col()
-                .gap_3()
-                .child(section_title("TASTATUR-LAYOUT"))
-                .child(muted(
-                    "Nur für die Beschriftung der Heatmap. Gezählt wird immer die physische Taste.",
-                ))
-                .child(div().flex().gap_1().children(
-                    [Layout::Qwertz, Layout::Qwerty].into_iter().map(|l| {
-                        chip(
-                            SharedString::from(format!("layout-{l:?}")),
-                            l.label(),
-                            s.layout == l,
-                        )
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.change_settings(cx, |s| s.layout = l)
-                        }))
-                    }),
-                ));
+        let p = c();
+        let appearance = card()
+            .flex()
+            .flex_col()
+            .gap_4()
+            .child(section_title("DARSTELLUNG"))
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_4()
+                    .child(div().w(px(130.)).text_sm().child("Hintergrund"))
+                    .child(
+                        div()
+                            .flex()
+                            .gap_1()
+                            .children(BASES.iter().map(|(id, label)| {
+                                let id = *id;
+                                chip(
+                                    SharedString::from(format!("base-{id}")),
+                                    *label,
+                                    s.theme_base == id,
+                                )
+                                .on_click(cx.listener(
+                                    move |this, _, _, cx| {
+                                        this.change_settings(cx, |s| s.theme_base = id.to_string())
+                                    },
+                                ))
+                            })),
+                    ),
+            )
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_4()
+                    .child(div().w(px(130.)).text_sm().child("Akzentfarbe"))
+                    .child(
+                        div()
+                            .flex()
+                            .flex_wrap()
+                            .gap_3()
+                            .children(ACCENTS.iter().map(|(id, label, on_dark, on_light)| {
+                                let id = *id;
+                                let color = if p.dark { *on_dark } else { *on_light };
+                                let selected = s.theme_accent == id;
+                                div()
+                                    .id(SharedString::from(format!("accent-{id}")))
+                                    .flex()
+                                    .items_center()
+                                    .gap_2()
+                                    .pl_1()
+                                    .pr_3()
+                                    .py_1()
+                                    .rounded_full()
+                                    .border_1()
+                                    .cursor_pointer()
+                                    .text_sm()
+                                    .border_color(rgb(if selected { color } else { p.border }))
+                                    .when(selected, |d| d.bg(rgb(p.accent_soft)))
+                                    .hover_style(move |st| st.border_color(rgb(color)))
+                                    .child(
+                                        div()
+                                            .size(px(18.))
+                                            .rounded_full()
+                                            .bg(rgb(color))
+                                            .flex()
+                                            .items_center()
+                                            .justify_center()
+                                            .when(selected, |d| {
+                                                d.child(icon(Icon::Check, 12., readable_on(color)))
+                                            }),
+                                    )
+                                    .child(*label)
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        this.change_settings(cx, |s| {
+                                            s.theme_accent = id.to_string()
+                                        })
+                                    }))
+                            })),
+                    ),
+            )
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_4()
+                    .child(div().w(px(130.)).text_sm().child("Tastatur-Layout"))
+                    .child(div().flex().gap_1().children(
+                        [Layout::Qwertz, Layout::Qwerty].into_iter().map(|l| {
+                            chip(
+                                SharedString::from(format!("layout-{l:?}")),
+                                l.label(),
+                                s.layout == l,
+                            )
+                            .on_click(cx.listener(
+                                move |this, _, _, cx| this.change_settings(cx, |s| s.layout = l),
+                            ))
+                        }),
+                    )),
+            );
 
         let backup_options: [(u32, &str); 4] = [
             (0, "Aus"),
@@ -206,7 +286,7 @@ impl MainView {
                 "Alles wird lokal gespeichert. Für einen PC-Wechsel: hier exportieren, auf dem neuen PC importieren. \
                  Importieren ist sicher wiederholbar – nichts wird doppelt gezählt.",
             ))
-            .child(div().text_xs().text_color(rgb(FAINT)).child(format!("Datenbank: {}", self.shared.db_path.display())))
+            .child(div().text_xs().text_color(rgb(c().faint)).child(format!("Datenbank: {}", self.shared.db_path.display())))
             .child(
                 div()
                     .flex()
@@ -245,7 +325,7 @@ impl MainView {
                     .child(button("add-exe", "Spiel-EXE auswählen …").on_click(cx.listener(|this, _, _, cx| this.add_exe(cx)))),
             )
             .child(muted("Wird ein Spiel nicht erkannt, füge seine EXE hinzu. Fälschlich erkannte Programme kannst du ignorieren."))
-            .when(self.rules.is_empty(), |d| d.child(div().text_sm().text_color(rgb(FAINT)).child("Noch keine Regeln.")))
+            .when(self.rules.is_empty(), |d| d.child(div().text_sm().text_color(rgb(c().faint)).child("Noch keine Regeln.")))
             .children(self.rules.iter().enumerate().map(|(i, r)| {
                 let exe = r.exe.clone();
                 div()
@@ -259,11 +339,11 @@ impl MainView {
                             .px_2()
                             .rounded_sm()
                             .text_xs()
-                            .when(r.ignored, |d| d.bg(rgb(0x3a2a14)).text_color(rgb(WARN)).child("ignoriert"))
-                            .when(!r.ignored, |d| d.bg(rgb(0x123a30)).text_color(rgb(LIVE)).child("Spiel")),
+                            .when(r.ignored, |d| d.bg(rgb(c().warn_bg)).text_color(rgb(c().warn)).child("ignoriert"))
+                            .when(!r.ignored, |d| d.bg(rgb(c().success_bg)).text_color(rgb(c().live)).child("Spiel")),
                     )
                     .child(div().w(px(240.)).truncate().child(if r.ignored { r.exe.clone() } else { r.name.clone() }))
-                    .child(div().flex_1().truncate().text_color(rgb(MUTED)).child(if r.ignored { String::new() } else { r.exe.clone() }))
+                    .child(div().flex_1().truncate().text_color(rgb(c().muted)).child(if r.ignored { String::new() } else { r.exe.clone() }))
                     .child(button(("rm-rule", i), "Entfernen").on_click(cx.listener(move |this, _, _, cx| {
                         if let Some(db) = &this.db {
                             db.remove_rule(&exe).ok();
@@ -304,14 +384,19 @@ impl MainView {
             .child(
                 text_input("proc-filter")
                     .state(self.proc_filter.downgrade())
+                    .placeholder_color(gpui::rgb_to_hsla(rgb(c().faint)))
+                    .caret_color(gpui::rgb_to_hsla(rgb(c().accent)))
+                    .selection_color(gpui::rgb_to_hsla(gpui::rgba((c().accent << 8) | 0x4d)))
+                    .caret_blink_interval_500ms()
+                    .text_color(rgb(c().text))
                     .placeholder("Suchen …")
                     .w(px(320.))
                     .px_2()
                     .py_1()
                     .rounded_md()
-                    .bg(rgb(BG))
+                    .bg(rgb(c().bg))
                     .border_1()
-                    .border_color(rgb(BORDER))
+                    .border_color(rgb(c().border))
                     .text_sm()
                     .whitespace_nowrap(),
             )
@@ -322,17 +407,22 @@ impl MainView {
                 let action = match &detected {
                     Some(name) => {
                         let name = name.clone();
-                        button(("ignore-proc", i), "Ignorieren").on_click(cx.listener(
+                        button(("ignore-proc", i), "Nicht mehr tracken").on_click(cx.listener(
                             move |this, _, _, cx| {
-                                this.set_rule(
-                                    Rule {
-                                        exe: exe.clone(),
-                                        name: String::new(),
-                                        ignored: true,
-                                    },
-                                    format!("{exe} („{name}“) wird ab jetzt ignoriert."),
-                                    cx,
-                                );
+                                if let Some(db) = &this.db {
+                                    match db.set_game_ignored(&name, true) {
+                                        Ok(()) => {
+                                            this.shared.rules_changed();
+                                            this.flash(
+                                                true,
+                                                format!("„{name}“ wird nicht mehr getrackt."),
+                                                cx,
+                                            );
+                                        }
+                                        Err(e) => this.flash(false, format!("{e:#}"), cx),
+                                    }
+                                }
+                                this.reload(cx);
                             },
                         ))
                     }
@@ -358,7 +448,7 @@ impl MainView {
                     .py_1()
                     .text_sm()
                     .border_t_1()
-                    .border_color(rgb(BORDER))
+                    .border_color(rgb(c().border))
                     .child(
                         div()
                             .flex_1()
@@ -373,16 +463,20 @@ impl MainView {
                                     .when_some(detected.clone(), |d, n| {
                                         d.child(
                                             div()
+                                                .flex()
+                                                .items_center()
+                                                .gap_1()
                                                 .text_xs()
-                                                .text_color(rgb(LIVE))
-                                                .child(format!("● erkannt als {n}")),
+                                                .text_color(rgb(c().live))
+                                                .child(dot(c().live, true))
+                                                .child(format!("erkannt als {n}")),
                                         )
                                     }),
                             )
                             .child(
                                 div()
                                     .text_xs()
-                                    .text_color(rgb(FAINT))
+                                    .text_color(rgb(c().faint))
                                     .truncate()
                                     .child(p.path.clone().unwrap_or_default()),
                             ),
@@ -390,22 +484,47 @@ impl MainView {
                     .child(action)
             }))
             .when(procs.len() > shown, |d| {
-                d.child(div().text_xs().text_color(rgb(FAINT)).child(format!(
+                d.child(div().text_xs().text_color(rgb(c().faint)).child(format!(
                     "… {} weitere – nutze die Suche.",
                     procs.len() - shown
                 )))
             });
 
-        let message = self.message.clone().map(|(ok, msg)| {
-            div()
-                .p_3()
-                .rounded_md()
-                .text_sm()
-                .border_1()
-                .when(ok, |d| d.bg(rgb(0x123a30)).border_color(rgb(LIVE)))
-                .when(!ok, |d| d.bg(rgb(0x3a1d22)).border_color(rgb(DANGER)))
-                .child(msg)
-        });
+        let message = self.message.clone().map(|(ok, msg)| notice(ok, msg));
+
+        let ignored = card()
+            .flex()
+            .flex_col()
+            .gap_3()
+            .child(section_title("IGNORIERTE PROGRAMME"))
+            .child(muted(
+                "Diese Programme werden nie als Spiel getrackt, z. B. Tools wie Wallpaper Engine.",
+            ))
+            .when(self.ignored.is_empty(), |d| {
+                d.child(div().text_sm().text_color(rgb(c().faint)).child("Keine."))
+            })
+            .children(self.ignored.iter().enumerate().map(|(i, name)| {
+                let name = name.clone();
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_3()
+                    .py_1()
+                    .text_sm()
+                    .child(icon(Icon::EyeOff, 14., c().faint))
+                    .child(div().flex_1().truncate().child(name.clone()))
+                    .child(
+                        button(("unignore", i), "Wieder tracken").on_click(cx.listener(
+                            move |this, _, _, cx| {
+                                if let Some(db) = &this.db {
+                                    db.set_game_ignored(&name, false).ok();
+                                    this.shared.rules_changed();
+                                }
+                                this.reload(cx);
+                            },
+                        )),
+                    )
+            }));
 
         div()
             .flex()
@@ -416,14 +535,15 @@ impl MainView {
             .when_some(self.key_error.clone(), |d, e| {
                 d.child(
                     card()
-                        .border_color(rgb(WARN))
-                        .child(div().text_sm().text_color(rgb(WARN)).child(e)),
+                        .border_color(rgb(c().warn))
+                        .child(div().text_sm().text_color(rgb(c().warn)).child(e)),
                 )
             })
             .child(tracking)
-            .child(layout)
+            .child(appearance)
             .child(data)
             .child(rules)
+            .child(ignored)
             .child(running)
     }
 }

@@ -30,12 +30,12 @@ impl MainView {
             .flex()
             .flex_wrap()
             .gap_3()
-            .child(stat("Tastenanschläge", fmt::number(total), ACCENT))
-            .child(stat("Lieblingstaste", favorite, LIVE))
+            .child(stat("Tastenanschläge", fmt::number(total), c().accent))
+            .child(stat("Lieblingstaste", favorite, c().live))
             .child(stat(
                 "Verschiedene Tasten",
                 self.key_totals.len().to_string(),
-                TEXT,
+                c().text,
             ));
         if matches!(self.key_period.kind, PeriodKind::Week | PeriodKind::Month)
             && days_with_data > 0
@@ -43,7 +43,7 @@ impl MainView {
             stats_row = stats_row.child(stat(
                 "Ø pro aktivem Tag",
                 fmt::number(total / days_with_data as u64),
-                TEXT,
+                c().text,
             ));
         }
 
@@ -91,9 +91,9 @@ impl MainView {
                         div()
                             .text_sm()
                             .text_color(rgb(if self.hovered_key.is_some() {
-                                TEXT
+                                c().text
                             } else {
-                                MUTED
+                                c().muted
                             }))
                             .child(hover_line),
                     ),
@@ -105,7 +105,7 @@ impl MainView {
                     .items_center()
                     .gap_2()
                     .text_xs()
-                    .text_color(rgb(MUTED))
+                    .text_color(rgb(c().muted))
                     .child("selten")
                     .children((0..=10).map(|i| {
                         div()
@@ -142,7 +142,7 @@ impl MainView {
                             .child(
                                 div()
                                     .w(px(28.))
-                                    .text_color(rgb(FAINT))
+                                    .text_color(rgb(c().faint))
                                     .child(format!("{}.", i + 1)),
                             )
                             .child(
@@ -161,7 +161,7 @@ impl MainView {
                                 div()
                                     .w(px(60.))
                                     .text_right()
-                                    .text_color(rgb(MUTED))
+                                    .text_color(rgb(c().muted))
                                     .child(format!("{pct:.1} %").replace('.', ",")),
                             )
                     }),
@@ -182,7 +182,7 @@ impl MainView {
                     ChartId::Keys,
                     &values,
                     |v| format!("{} Anschläge", fmt::number(v)),
-                    LIVE,
+                    c().live,
                     cx,
                 ))
         });
@@ -190,8 +190,8 @@ impl MainView {
         let notice = if let Some(err) = &self.key_error {
             Some(
                 card()
-                    .border_color(rgb(WARN))
-                    .child(div().text_sm().text_color(rgb(WARN)).child(err.clone())),
+                    .border_color(rgb(c().warn))
+                    .child(div().text_sm().text_color(rgb(c().warn)).child(err.clone())),
             )
         } else if !self.settings.track_keys {
             Some(card().child(muted(
@@ -255,16 +255,26 @@ impl MainView {
                                     (n as f32 / max as f32).sqrt()
                                 };
                                 let hovered = self.hovered_key.as_deref() == Some(id);
-                                let dark_text = t > 0.6;
+                                let key_bg = heat_u32(t);
+                                let fg = if t > 0.45 {
+                                    readable_on(key_bg)
+                                } else {
+                                    c().text
+                                };
+                                let fg_soft = blend(fg, key_bg, 0.4);
                                 div()
                                     .id(SharedString::from(format!("key-{b}-{r}-{s}")))
                                     .w(px(width))
                                     .h(px(UNIT))
                                     .flex_none()
                                     .rounded(px(5.))
-                                    .bg(heat(t))
+                                    .bg(rgb(key_bg))
                                     .border_1()
-                                    .border_color(if hovered { rgb(0xffffff) } else { rgb(BORDER) })
+                                    .border_color(if hovered {
+                                        rgb(c().text)
+                                    } else {
+                                        rgb(c().border)
+                                    })
                                     .flex()
                                     .flex_col()
                                     .justify_center()
@@ -283,11 +293,7 @@ impl MainView {
                                             div()
                                                 .text_xs()
                                                 .font_weight(FontWeight::SEMIBOLD)
-                                                .text_color(rgb(if dark_text {
-                                                    0x15121f
-                                                } else {
-                                                    TEXT
-                                                }))
+                                                .text_color(rgb(fg))
                                                 .child(keymap::label(id, layout)),
                                         )
                                         .when(
@@ -296,11 +302,7 @@ impl MainView {
                                                 d.child(
                                                     div()
                                                         .text_size(px(9.))
-                                                        .text_color(rgb(if dark_text {
-                                                            0x3a3350
-                                                        } else {
-                                                            MUTED
-                                                        }))
+                                                        .text_color(rgb(fg_soft))
                                                         .child(compact(n)),
                                                 )
                                             },

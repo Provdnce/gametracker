@@ -33,6 +33,10 @@ pub struct Settings {
     pub backups_to_keep: usize,
     /// Closing the window keeps tracking in the background.
     pub run_in_background: bool,
+    /// Color scheme: background ("graphite", "midnight", "light")
+    pub theme_base: String,
+    /// Color scheme: accent ("indigo", "ocean", "sage", "sand", "rose", "mono")
+    pub theme_accent: String,
 }
 
 impl Default for Settings {
@@ -48,6 +52,8 @@ impl Default for Settings {
             backup_every_days: 7,
             backups_to_keep: 12,
             run_in_background: true,
+            theme_base: "graphite".into(),
+            theme_accent: "indigo".into(),
         }
     }
 }
@@ -290,17 +296,18 @@ fn game_loop(shared: Arc<Shared>) {
         }
     };
     let mut sys = System::new();
-    let mut detector = Detector::new(
-        db.rules().unwrap_or_default(),
-        shared.settings().auto_detect,
-    );
+    let make_detector = |auto: bool| {
+        Detector::new(db.rules().unwrap_or_default(), auto)
+            .with_ignored(db.ignored_games().unwrap_or_default())
+    };
+    let mut detector = make_detector(shared.settings().auto_detect);
     let mut active: HashMap<String, Running> = HashMap::new();
     let mut last_tick = Utc::now().timestamp();
 
     loop {
         let settings = shared.settings();
         if shared.rules_changed.swap(false, Ordering::SeqCst) {
-            detector = Detector::new(db.rules().unwrap_or_default(), settings.auto_detect);
+            detector = make_detector(settings.auto_detect);
         }
 
         let now = Utc::now().timestamp();

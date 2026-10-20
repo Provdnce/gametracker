@@ -38,9 +38,9 @@ impl MainView {
                     .px_4()
                     .py_3()
                     .cursor_pointer()
-                    .when(i > 0, |d| d.border_t_1().border_color(rgb(BORDER)))
-                    .when(selected, |d| d.bg(rgb(CARD_HOVER)))
-                    .hover_style(|s| s.bg(rgb(CARD_HOVER)))
+                    .when(i > 0, |d| d.border_t_1().border_color(rgb(c().border)))
+                    .when(selected, |d| d.bg(rgb(c().card_hover)))
+                    .hover_style(|s| s.bg(rgb(c().card_hover)))
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.message = None;
                         if this.selected_game == Some(id) {
@@ -61,7 +61,7 @@ impl MainView {
                         div()
                             .w(px(24.))
                             .text_sm()
-                            .text_color(rgb(FAINT))
+                            .text_color(rgb(c().faint))
                             .child(format!("{}.", i + 1)),
                     )
                     .child(
@@ -90,11 +90,18 @@ impl MainView {
                                     )
                                     .when(is_live, |d| {
                                         d.child(
-                                            div().text_xs().text_color(rgb(LIVE)).child("● live"),
+                                            div()
+                                                .flex()
+                                                .items_center()
+                                                .gap_1()
+                                                .text_xs()
+                                                .text_color(rgb(c().live))
+                                                .child(dot(c().live, true))
+                                                .child("läuft"),
                                         )
                                     }),
                             )
-                            .child(div().text_xs().text_color(rgb(MUTED)).child(format!(
+                            .child(div().text_xs().text_color(rgb(c().muted)).child(format!(
                                 "{} Sessions · zuletzt {}",
                                 g.sessions,
                                 fmt::date(g.last_played)
@@ -138,9 +145,9 @@ impl MainView {
                     .flex()
                     .flex_wrap()
                     .gap_3()
-                    .child(stat("Spielzeit", fmt::duration(total_secs), ACCENT))
-                    .child(stat("Spiele", totals.len().to_string(), TEXT))
-                    .child(stat("Sessions", session_count.to_string(), TEXT)),
+                    .child(stat("Spielzeit", fmt::duration(total_secs), c().accent))
+                    .child(stat("Spiele", totals.len().to_string(), c().text))
+                    .child(stat("Sessions", session_count.to_string(), c().text)),
             )
             .when(totals.is_empty(), |d| {
                 d.child(card().child(muted("In diesem Zeitraum wurde nichts gespielt.")))
@@ -183,9 +190,9 @@ impl MainView {
             .gap_4()
             .px_6()
             .py_4()
-            .bg(rgb(BG))
+            .bg(rgb(c().bg))
             .border_t_1()
-            .border_color(rgb(BORDER))
+            .border_color(rgb(c().border))
             .child(
                 div()
                     .flex()
@@ -204,14 +211,19 @@ impl MainView {
                     .child(
                         text_input("rename-input")
                             .state(self.rename_input.downgrade())
+                            .placeholder_color(gpui::rgb_to_hsla(rgb(c().faint)))
+                            .caret_color(gpui::rgb_to_hsla(rgb(c().accent)))
+                            .selection_color(gpui::rgb_to_hsla(gpui::rgba((c().accent << 8) | 0x4d)))
+                            .caret_blink_interval_500ms()
+                            .text_color(rgb(c().text))
                             .placeholder("Neuer Name")
                             .w(px(300.))
                             .px_2()
                             .py_1()
                             .rounded_md()
-                            .bg(rgb(CARD))
+                            .bg(rgb(c().card))
                             .border_1()
-                            .border_color(rgb(BORDER))
+                            .border_color(rgb(c().border))
                             .text_sm()
                             .whitespace_nowrap(),
                     )
@@ -228,7 +240,45 @@ impl MainView {
                         }
                         this.reload(cx);
                     })))
-                    .child(button("delete-btn", "Löschen").text_color(rgb(DANGER)).on_click(cx.listener(
+                    .child(button("ignore-btn", "Nicht mehr tracken").on_click(cx.listener(
+                        move |this, _, window, cx| {
+                            let name = this.games.iter().find(|g| g.id == id).map(|g| g.name.clone()).unwrap_or_default();
+                            let answer = window.prompt(
+                                PromptLevel::Info,
+                                &format!("„{name}“ nicht mehr tracken?"),
+                                Some("Rückgängig unter Einstellungen."),
+                                &["Ignorieren, bisherige Zeit behalten", "Ignorieren und Verlauf löschen", "Abbrechen"],
+                                cx,
+                            );
+                            cx.spawn(async move |this, cx| {
+                                let choice = answer.await.unwrap_or(2);
+                                if choice > 1 {
+                                    return;
+                                }
+                                this.update(cx, |this, cx| {
+                                    if let Some(db) = &this.db {
+                                        let result = db.set_game_ignored(&name, true).and_then(|_| {
+                                            if choice == 1 { db.delete_game(id) } else { Ok(()) }
+                                        });
+                                        match result {
+                                            Ok(()) => {
+                                                this.shared.rules_changed();
+                                                if choice == 1 {
+                                                    this.selected_game = None;
+                                                }
+                                                this.flash(true, format!("„{name}“ wird nicht mehr getrackt."), cx);
+                                            }
+                                            Err(e) => this.flash(false, format!("{e:#}"), cx),
+                                        }
+                                    }
+                                    this.reload(cx);
+                                })
+                                .ok();
+                            })
+                            .detach();
+                        },
+                    )))
+                    .child(button("delete-btn", "Löschen").text_color(rgb(c().danger)).on_click(cx.listener(
                         move |this, _, window, cx| {
                             let name = this.games.iter().find(|g| g.id == id).map(|g| g.name.clone()).unwrap_or_default();
                             let answer = window.prompt(
@@ -256,7 +306,7 @@ impl MainView {
                     ))),
             )
             .when_some(self.message.clone(), |d, (ok, msg)| {
-                d.child(div().text_sm().text_color(rgb(if ok { LIVE } else { DANGER })).child(msg))
+                d.child(div().text_sm().text_color(rgb(if ok { c().live } else { c().danger })).child(msg))
             })
             .child(
                 div().flex().flex_col().children(sessions.iter().take(shown).map(|s| {
@@ -265,18 +315,18 @@ impl MainView {
                         .gap_4()
                         .py_1()
                         .text_sm()
-                        .child(div().w(px(110.)).text_color(rgb(MUTED)).child(fmt::date(s.start)))
+                        .child(div().w(px(110.)).text_color(rgb(c().muted)).child(fmt::date(s.start)))
                         .child(
                             div()
                                 .w(px(120.))
-                                .text_color(rgb(MUTED))
+                                .text_color(rgb(c().muted))
                                 .child(format!("{} – {}", fmt::time(s.start), fmt::time(s.end))),
                         )
                         .child(div().child(fmt::duration(s.duration())))
                 })),
             )
             .when(sessions.len() > shown, |d| {
-                d.child(div().text_xs().text_color(rgb(FAINT)).child(format!(
+                d.child(div().text_xs().text_color(rgb(c().faint)).child(format!(
                     "… und {} ältere Sessions (Zeitraum eingrenzen, um sie zu sehen)",
                     sessions.len() - shown
                 )))

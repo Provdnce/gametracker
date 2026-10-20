@@ -6,7 +6,7 @@ use chrono::{NaiveDate, Utc};
 use rusqlite::{Connection, OptionalExtension, params};
 use std::path::{Path, PathBuf};
 
-const SCHEMA_VERSION: i64 = 1;
+const SCHEMA_VERSION: i64 = 2;
 
 pub struct Db {
     conn: Connection,
@@ -125,6 +125,13 @@ impl Db {
                     ignored INTEGER NOT NULL DEFAULT 0
                 );
                 ",
+            )?;
+        }
+        if version < 2 {
+            self.conn.execute_batch(
+                "CREATE TABLE IF NOT EXISTS ignored_games(
+                    name TEXT PRIMARY KEY COLLATE NOCASE
+                );",
             )?;
         }
         self.conn
@@ -441,6 +448,29 @@ impl Db {
              ON CONFLICT(exe) DO UPDATE SET name = excluded.name, ignored = excluded.ignored",
             params![rule.exe.to_lowercase(), rule.name, rule.ignored as i64],
         )?;
+        Ok(())
+    }
+
+    // -------------------------------------------------------- ignored games
+
+    pub fn ignored_games(&self) -> Result<Vec<String>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT name FROM ignored_games ORDER BY name")?;
+        let rows = stmt.query_map([], |r| r.get(0))?;
+        Ok(rows.collect::<Result<_, _>>()?)
+    }
+
+    pub fn set_game_ignored(&self, name: &str, ignored: bool) -> Result<()> {
+        if ignored {
+            self.conn.execute(
+                "INSERT INTO ignored_games(name) VALUES(?1) ON CONFLICT(name) DO NOTHING",
+                [name],
+            )?;
+        } else {
+            self.conn
+                .execute("DELETE FROM ignored_games WHERE name = ?1", [name])?;
+        }
         Ok(())
     }
 

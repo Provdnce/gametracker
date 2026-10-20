@@ -29,6 +29,8 @@ pub struct ExportFile {
     pub key_counts: Vec<ExportKeyCount>,
     #[serde(default)]
     pub rules: Vec<Rule>,
+    #[serde(default)]
+    pub ignored_games: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -122,6 +124,7 @@ pub fn build_export(db: &Db) -> Result<ExportFile> {
             })
             .collect(),
         rules: db.rules()?,
+        ignored_games: db.ignored_games()?,
     })
 }
 
@@ -207,6 +210,12 @@ pub fn import(db: &mut Db, data: ExportFile) -> Result<ImportSummary> {
             tx.execute(
                 "INSERT INTO rules(exe, name, ignored) VALUES(?1, ?2, ?3) ON CONFLICT(exe) DO NOTHING",
                 params![r.exe.to_lowercase(), r.name, r.ignored as i64],
+            )?;
+        }
+        for name in &data.ignored_games {
+            tx.execute(
+                "INSERT INTO ignored_games(name) VALUES(?1) ON CONFLICT(name) DO NOTHING",
+                [name],
             )?;
         }
     }

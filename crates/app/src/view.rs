@@ -43,13 +43,13 @@ impl Page {
         }
     }
 
-    fn icon(self) -> &'static str {
+    fn icon(self) -> Icon {
         match self {
-            Page::Overview => "◈",
-            Page::Games => "▶",
-            Page::History => "◷",
-            Page::Keyboard => "⌨",
-            Page::Settings => "⚙",
+            Page::Overview => Icon::Overview,
+            Page::Games => Icon::Games,
+            Page::History => Icon::History,
+            Page::Keyboard => Icon::Keyboard,
+            Page::Settings => Icon::Settings,
         }
     }
 }
@@ -80,6 +80,7 @@ pub struct MainView {
     pub active: Vec<ActiveGame>,
     pub settings: Settings,
     pub rules: Vec<Rule>,
+    pub ignored: Vec<String>,
     pub running: Vec<RunningProcess>,
     pub key_error: Option<String>,
     pub last_error: Option<String>,
@@ -140,6 +141,7 @@ impl MainView {
             active: Vec::new(),
             settings,
             rules: Vec::new(),
+            ignored: Vec::new(),
             running: Vec::new(),
             key_error: None,
             last_error: None,
@@ -178,6 +180,7 @@ impl MainView {
             self.sessions = db.all_sessions()?;
             self.games = db.games()?;
             self.rules = db.rules()?;
+            self.ignored = db.ignored_games()?;
             let today = Local::now().date_naive();
             self.keys_today = db
                 .key_totals(Some((today, today)))?
@@ -281,7 +284,7 @@ impl MainView {
 
     // ------------------------------------------------------------ widgets
 
-    /// Gesamt / Jahr / Monat / Woche / Tag + ‹ label › navigation.
+    /// Gesamt / Jahr / Monat / Woche / Tag + < label > navigation.
     pub fn period_bar(&self, target: PeriodTarget, cx: &mut Context<Self>) -> impl IntoElement {
         let period = match target {
             PeriodTarget::Games => self.games_period,
@@ -296,9 +299,9 @@ impl MainView {
             .gap_1()
             .p_1()
             .rounded_lg()
-            .bg(rgb(CARD))
+            .bg(rgb(c().card))
             .border_1()
-            .border_color(rgb(BORDER))
+            .border_color(rgb(c().border))
             .children(PeriodKind::ALL.iter().enumerate().map(|(i, kind)| {
                 let kind = *kind;
                 chip(
@@ -323,26 +326,30 @@ impl MainView {
                 .items_center()
                 .gap_2()
                 .child(
-                    button(SharedString::from(format!("{tid}-prev")), "‹").on_click(cx.listener(
-                        move |this, _, _, cx| this.set_period(target, period.prev(), cx),
-                    )),
+                    icon_button(SharedString::from(format!("{tid}-prev")), Icon::ChevronLeft)
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.set_period(target, period.prev(), cx)
+                        })),
                 )
                 .child(
                     div()
                         .min_w(px(220.))
                         .text_center()
                         .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(rgb(TEXT))
+                        .text_color(rgb(c().text))
                         .child(period.label()),
                 )
                 .child(
-                    button(SharedString::from(format!("{tid}-next")), "›")
-                        .when(at_end, |b| b.opacity(0.35))
-                        .when(!at_end, |b| {
-                            b.on_click(cx.listener(move |this, _, _, cx| {
-                                this.set_period(target, period.next(), cx)
-                            }))
-                        }),
+                    icon_button(
+                        SharedString::from(format!("{tid}-next")),
+                        Icon::ChevronRight,
+                    )
+                    .when(at_end, |b| b.opacity(0.35))
+                    .when(!at_end, |b| {
+                        b.on_click(cx.listener(move |this, _, _, cx| {
+                            this.set_period(target, period.next(), cx)
+                        }))
+                    }),
                 )
                 .when(!at_end, |d| {
                     d.child(
@@ -393,7 +400,11 @@ impl MainView {
             .child(
                 div()
                     .text_sm()
-                    .text_color(rgb(if hovered.is_some() { TEXT } else { MUTED }))
+                    .text_color(rgb(if hovered.is_some() {
+                        c().text
+                    } else {
+                        c().muted
+                    }))
                     .child(caption),
             )
             .child(div().flex().items_end().gap(px(3.)).h(px(140.)).children(
@@ -422,9 +433,9 @@ impl MainView {
                                 .h(gpui::relative(if *v > 0 { frac.max(0.02) } else { 0.0 }))
                                 .min_h(px(2.))
                                 .bg(if *v == 0 {
-                                    rgb(CARD_HOVER)
+                                    rgb(c().card_hover)
                                 } else if is_hovered {
-                                    mix(color, 0xffffff, 0.3)
+                                    mix(color, c().text, 0.3)
                                 } else {
                                     rgb(color)
                                 }),
@@ -441,7 +452,7 @@ impl MainView {
                             .overflow_hidden()
                             .text_xs()
                             .text_center()
-                            .text_color(rgb(FAINT))
+                            .text_color(rgb(c().faint))
                             .child(if i % label_every == 0 {
                                 label.clone()
                             } else {
@@ -452,6 +463,7 @@ impl MainView {
     }
 
     fn sidebar(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let p = c();
         let nav = Page::ALL.iter().map(|page| {
             let page = *page;
             let selected = self.page == page;
@@ -464,66 +476,93 @@ impl MainView {
                 .py_2()
                 .rounded_md()
                 .cursor_pointer()
-                .text_color(rgb(if selected { TEXT } else { MUTED }))
-                .when(selected, |d| d.bg(rgb(ACCENT_SOFT)))
-                .when(!selected, |d| {
-                    d.hover_style(|s| s.bg(rgb(CARD)).text_color(rgb(TEXT)))
+                .text_sm()
+                .text_color(rgb(if selected { p.text } else { p.muted }))
+                .when(selected, |d| {
+                    d.bg(rgb(p.accent_soft)).font_weight(FontWeight::MEDIUM)
                 })
-                .child(
-                    div()
-                        .w(px(18.))
-                        .text_color(rgb(if selected { ACCENT } else { FAINT }))
-                        .child(page.icon()),
-                )
+                .when(!selected, |d| {
+                    d.hover_style(move |s| s.bg(rgb(p.card)).text_color(rgb(p.text)))
+                })
+                .child(icon(
+                    page.icon(),
+                    16.,
+                    if selected { p.accent } else { p.faint },
+                ))
                 .child(page.label())
                 .on_click(cx.listener(move |this, _, _, cx| this.go(page, cx)))
         });
 
+        let line = |i: Icon, color: u32, text: String| {
+            div()
+                .flex()
+                .items_center()
+                .gap_2()
+                .text_color(rgb(color))
+                .child(icon(i, 13., color))
+                .child(text)
+        };
+
+        let game_status = match self.active.first() {
+            Some(g) if self.settings.track_games => div()
+                .flex()
+                .flex_col()
+                .gap_1()
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .text_color(rgb(p.live))
+                        .child(dot(p.live, true))
+                        .child("Spielt gerade"),
+                )
+                .child(
+                    div()
+                        .text_sm()
+                        .text_color(rgb(p.text))
+                        .truncate()
+                        .child(g.name.clone()),
+                )
+                .child(
+                    div()
+                        .text_color(rgb(p.muted))
+                        .child(fmt::duration(chrono::Utc::now().timestamp() - g.start)),
+                ),
+            _ if self.settings.track_games => div()
+                .flex()
+                .items_center()
+                .gap_2()
+                .text_color(rgb(p.muted))
+                .child(dot(p.faint, false))
+                .child("Kein Spiel aktiv"),
+            _ => line(Icon::Pause, p.muted, "Spiele-Tracking pausiert".into()),
+        };
+
+        let key_status = if self.key_error.is_some() {
+            line(Icon::Alert, p.warn, "Tastatur-Listener aus".into())
+        } else if self.settings.track_keys {
+            line(
+                Icon::Keyboard,
+                p.muted,
+                format!("{} Tasten heute", fmt::number(self.keys_today)),
+            )
+        } else {
+            line(Icon::Pause, p.muted, "Tasten-Tracking pausiert".into())
+        };
+
         let status = div()
             .flex()
             .flex_col()
-            .gap_2()
+            .gap_3()
             .p_3()
             .rounded_lg()
-            .bg(rgb(CARD))
+            .bg(rgb(p.card))
+            .border_1()
+            .border_color(rgb(p.border))
             .text_xs()
-            .child(match self.active.first() {
-                Some(g) if self.settings.track_games => div()
-                    .flex()
-                    .flex_col()
-                    .gap_0p5()
-                    .child(div().text_color(rgb(LIVE)).child("● Spielt gerade"))
-                    .child(div().text_sm().text_color(rgb(TEXT)).child(g.name.clone()))
-                    .child(
-                        div()
-                            .text_color(rgb(MUTED))
-                            .child(fmt::duration(chrono::Utc::now().timestamp() - g.start)),
-                    ),
-                _ => div()
-                    .text_color(rgb(MUTED))
-                    .child(if self.settings.track_games {
-                        "○ Kein Spiel aktiv"
-                    } else {
-                        "⏸ Spiele-Tracking pausiert"
-                    }),
-            })
-            .child(
-                div()
-                    .text_color(rgb(
-                        if self.settings.track_keys && self.key_error.is_none() {
-                            MUTED
-                        } else {
-                            WARN
-                        },
-                    ))
-                    .child(if self.key_error.is_some() {
-                        "⚠ Tastatur-Listener aus".to_string()
-                    } else if self.settings.track_keys {
-                        format!("⌨ {} Tasten heute", fmt::number(self.keys_today))
-                    } else {
-                        "⏸ Tasten-Tracking pausiert".to_string()
-                    }),
-            );
+            .child(game_status)
+            .child(key_status);
 
         div()
             .flex_none()
@@ -532,9 +571,9 @@ impl MainView {
             .flex()
             .flex_col()
             .justify_between()
-            .bg(rgb(SIDEBAR))
+            .bg(rgb(p.sidebar))
             .border_r_1()
-            .border_color(rgb(BORDER))
+            .border_color(rgb(p.border))
             .p_3()
             .child(
                 div()
@@ -543,18 +582,18 @@ impl MainView {
                     .gap_1()
                     .child(
                         div()
-                            .px_3()
+                            .px_2()
                             .pt_2()
-                            .pb_5()
+                            .pb_6()
                             .flex()
                             .items_center()
-                            .gap_2()
-                            .child(div().text_xl().text_color(rgb(ACCENT)).child("◆"))
+                            .gap_3()
+                            .child(logo(30.))
                             .child(
                                 div()
-                                    .text_lg()
-                                    .font_weight(FontWeight::BOLD)
-                                    .text_color(rgb(TEXT))
+                                    .text_base()
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .text_color(rgb(p.text))
                                     .child("GameTracker"),
                             ),
                     )
@@ -564,13 +603,17 @@ impl MainView {
                 div().flex().flex_col().gap_2().child(status).child(
                     div()
                         .id("quit")
+                        .flex()
+                        .items_center()
+                        .gap_2()
                         .px_3()
                         .py_1()
                         .text_xs()
-                        .text_color(rgb(FAINT))
+                        .text_color(rgb(p.faint))
                         .cursor_pointer()
-                        .hover_style(|s| s.text_color(rgb(DANGER)))
-                        .child("Beenden (Tracking stoppt)")
+                        .hover_style(move |s| s.text_color(rgb(p.danger)))
+                        .child(icon(Icon::Power, 13., p.faint))
+                        .child("Beenden")
                         .on_click(|_, _, cx| cx.quit()),
                 ),
             )
@@ -579,6 +622,8 @@ impl MainView {
 
 impl Render for MainView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        set_palette(&self.settings.theme_base, &self.settings.theme_accent);
+        let p = c();
         let page: AnyElement = match self.page {
             Page::Overview => self.render_overview(cx).into_any_element(),
             Page::Games => self.render_games(window, cx).into_any_element(),
@@ -587,23 +632,17 @@ impl Render for MainView {
             Page::Settings => self.render_settings(window, cx).into_any_element(),
         };
 
-        let error_banner = self.last_error.clone().map(|e| {
-            div()
-                .p_3()
-                .rounded_md()
-                .bg(rgb(0x3a1d22))
-                .border_1()
-                .border_color(rgb(DANGER))
-                .text_sm()
-                .text_color(rgb(TEXT))
-                .child(format!("Fehler: {e}"))
-        });
+        let error_banner = self
+            .last_error
+            .clone()
+            .map(|e| notice(false, format!("Fehler: {e}")));
 
         div()
             .size_full()
             .flex()
-            .bg(rgb(BG))
-            .text_color(rgb(TEXT))
+            .font_family("Inter")
+            .bg(rgb(p.bg))
+            .text_color(rgb(p.text))
             .child(self.sidebar(cx))
             .child(
                 div()
@@ -619,6 +658,7 @@ impl Render for MainView {
                             .flex_col()
                             .gap_5()
                             .p_8()
+                            .max_w(px(1180.))
                             .children(error_banner)
                             .child(page),
                     ),
